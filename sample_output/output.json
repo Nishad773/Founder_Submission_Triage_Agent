@@ -1,0 +1,17 @@
+{
+  "company_name": "Acme Robotics",
+  "sector": "Industrial automation",
+  "stage": "Seed",
+  "funding_ask": "$2M",
+  "traction_stats": [
+    "$420k ARR",
+    "18 enterprise customers",
+    "22% month-over-month revenue growth"
+  ],
+  "business_model": "Annual SaaS contracts sold to warehouse operators.",
+  "red_flags": [
+    "Customer concentration is high.",
+    "Gross margin trend is not clearly shown.",
+    "Go-to-market hiring plan is underspecified."
+  ]
+}
