@@ -1,155 +1,179 @@
 # Founder Submission Triage Agent
 
-Minimal FastAPI service that accepts a startup pitch deck in `PDF` or `PPTX`, extracts the most relevant text, sends a compact prompt to the OpenAI API, validates the response with Pydantic, and returns clean structured JSON.
+Founder Submission Triage Agent is a lightweight internal screening product for venture capital teams, angel networks, and accredited investor platforms. It helps investment teams move from inbox-driven founder intake to faster, more consistent first-pass analysis.
 
-## Stack
+## Problem
 
-- Python
-- FastAPI
-- OpenAI API
-- PyMuPDF
-- python-pptx
-- Pydantic
+Manual founder screening is slow and inconsistent.
 
-## Project Structure
+Pitch decks arrive in different formats, financial data is scattered across attachments, and early diligence often depends on whoever happens to review the submission first. That creates uneven screening quality, slower turnaround times, and too much analyst time spent on repetitive intake work.
 
-```text
-app/
-  main.py
-  parser.py
-  extractor.py
-  schemas.py
-  utils.py
-requirements.txt
-README.md
-.env.example
-sample_output/
-  output.json
-sample_files/
-  placeholder.txt
+## Solution
+
+AI-powered startup intake and investment analysis.
+
+This MVP ingests founder materials, extracts high-signal evidence from multiple documents, sends a structured context bundle to Gemini, validates the response, and presents the result in a clean Streamlit interface designed for investor workflows.
+
+## Features
+
+- Multi-document ingestion
+- PDF/PPTX support
+- Gemini-powered analysis
+- Investment readiness scoring
+- Evidence-backed extraction
+- JSON export
+
+## Who It Is For
+
+- Venture Capital teams running high-volume inbound founder review
+- Angel networks triaging early-stage opportunities before partner discussion
+- Accredited investor platforms standardizing intake and first-pass screening
+
+## Product Workflow
+
+```mermaid
+flowchart TD
+    A["Pitch Decks / Financials"] --> B["Document Parser"]
+    B --> C["Text Processing"]
+    C --> D["Gemini"]
+    D --> E["Validation"]
+    E --> F["Investment Analysis"]
+    F --> G["Streamlit UI"]
 ```
+
+## What The Product Delivers
+
+- Founder submissions are grouped into a unified evidence bundle across pitch decks, financial statements, cap tables, and legal documents.
+- Gemini produces a structured screening output with company overview, traction signals, strengths, concerns, red flags, and readiness scoring.
+- Source attribution is preserved wherever the uploaded materials clearly support a field.
+- Analysts can review the result quickly in the UI and export JSON for downstream workflows.
+
+## Architecture
+
+- `app/main.py`
+Handles FastAPI endpoints, upload orchestration, and backward-compatible single-file support.
+
+- `app/parser.py`
+Extracts text from PDF and PPTX files, preserves source boundaries, and assembles the internal document bundle.
+
+- `app/utils.py`
+Normalizes text, removes repeated noise, prioritizes relevant content, and loads environment configuration.
+
+- `app/extractor.py`
+Sends the unified context to Gemini, enforces structured output, retries once on malformed output, and maps API errors clearly.
+
+- `app/schemas.py`
+Defines typed response models, evidence attribution, and readiness scoring.
+
+- `frontend/app.py`
+Provides the investor-facing Streamlit interface for upload, review, and export.
 
 ## Setup
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+1. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Copy environment variables:
+2. Copy environment variables:
 
 ```bash
 cp .env.example .env
 ```
 
-4. Start the API:
+3. Start the API:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-5. Open Swagger docs:
+4. Start the UI:
 
-`http://127.0.0.1:8000/docs`
+```bash
+streamlit run frontend/app.py
+```
+
+5. Open:
+
+- API docs: `http://127.0.0.1:8000/docs`
+- Streamlit UI: `http://localhost:8501`
 
 ## Environment Variables
 
-- `OPENAI_API_KEY`: required API key for OpenAI.
-- `OPENAI_MODEL`: optional model name. Defaults to `gpt-4o-mini`.
+- `GEMINI_API_KEY`
+- `BACKEND_API_URL`
 
-## Architecture
+## Analyst Experience
 
-- `app/main.py`: FastAPI entrypoint and request handling.
-- `app/parser.py`: PDF/PPTX extraction and deck-text preparation.
-- `app/extractor.py`: OpenAI request logic, schema validation, and retry flow.
-- `app/schemas.py`: response schema and Swagger examples.
-- `app/utils.py`: normalization, prioritization, env loading, and shared helpers.
+### Upload Screen
 
-## Design Decisions
+Placeholder: add a screenshot of the multi-document upload interface here.
 
-- Keep the stack small: FastAPI, OpenAI SDK, PyMuPDF, python-pptx, Pydantic.
-- No agents, vector database, queues, or persistence for the MVP.
-- Preserve headings, metrics, and slide/page boundaries because those are often the highest-signal parts of a deck.
-- Strip repeated short footer/header noise before the LLM call to reduce wasted tokens.
-- Prioritize lines with metrics and fundraising/business keywords so large decks fit into a smaller context window.
-- Use strict `json_schema` output plus Pydantic validation to reduce malformed responses.
+### Analysis Screen
+
+Placeholder: add a screenshot of the loading and active analysis experience here.
+
+### Results Screen
+
+Placeholder: add a screenshot of the company overview, readiness score, strengths, concerns, and red flags here.
 
 ## API
 
 ### `POST /analyze`
 
-Accepts multipart form-data with one file field named `file`.
+Accepts multipart form-data. The backend supports both:
+
+- a legacy single `file` upload
+- categorized uploads for:
+  - `pitch_deck`
+  - `financial_statements`
+  - `cap_table`
+  - `legal_documents`
 
 Supported file types:
 
 - `.pdf`
 - `.pptx`
 
-## curl Example
+## Sample Request
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/analyze" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
-  -F "file=@sample-deck.pdf"
+  -F "pitch_deck=@sample-deck.pdf" \
+  -F "financial_statements=@financials.pdf" \
+  -F "cap_table=@cap-table.pdf"
 ```
 
-## Sample Output
+## Demo Output
 
-```json
-{
-  "company_name": "Acme Robotics",
-  "sector": "Industrial automation",
-  "stage": "Seed",
-  "funding_ask": "$2M",
-  "traction_stats": [
-    "$420k ARR",
-    "18 enterprise customers",
-    "22% month-over-month revenue growth"
-  ],
-  "business_model": "Annual SaaS contracts sold to warehouse operators.",
-  "red_flags": [
-    "Customer concentration is high.",
-    "Gross margin trend is not clearly shown.",
-    "Go-to-market hiring plan is underspecified."
-  ]
-}
-```
+The demo output lives at [sample_output/output.json](/D:/Founder%20Submission%20Triage%20%20Agent/sample_output/output.json:1).
 
-A sample JSON file is included at [sample_output/output.json](/D:/Founder%20Submission%20Triage%20%20Agent/sample_output/output.json:1).
+The backend currently returns `investment_readiness_score`; in product copy and UI this is presented as the readiness score.
 
-## Error Handling
+## Reliability Notes
 
-The API returns clear `4xx` and `5xx` responses for:
+- Structured output is validated with Pydantic before being returned.
+- Gemini output is retried once if the response is malformed or schema-invalid.
+- Source attribution is only included when it can be grounded to the uploaded document bundle.
+- Repeated footer/header noise is stripped before LLM submission to keep context focused.
 
-- unsupported file types
-- empty uploads
-- empty text extraction
-- extraction failures
-- malformed or schema-invalid LLM responses
-- missing OpenAI credentials
-- invalid or unauthorized API keys
-- exhausted OpenAI quota
+## Investor Positioning
 
-## Hallucination Mitigation
+This project is best understood as an internal intake and triage layer, not a final investment decision system. It helps investment teams:
 
-- Only extracted deck text is sent to the model.
-- The prompt is intentionally narrow and field-specific.
-- The extraction step keeps numeric metrics and section headings whenever possible.
-- The output is constrained by JSON schema and validated again in application code.
-- A single retry is used only when the model output is malformed or schema-invalid.
-
-## Limitations
-
-- Image-only PDFs without OCR will usually return little or no text.
-- Very large decks are prioritized and truncated before the LLM call to keep token usage low.
-- The output quality depends on how much useful text exists in the source deck.
+- standardize first-pass founder review
+- surface missing diligence quickly
+- prioritize stronger opportunities for deeper discussion
+- export consistent structured outputs for internal workflows
 
 ## Future Improvements
 
-- Add OCR fallback for image-based PDFs.
-- Add optional confidence notes per field.
-- Add lightweight caching by file hash.
-- Add async background processing for very large decks.
+1. OCR support
+2. Multi-document diligence
+3. Cap table analysis
+4. Financial benchmarking
+5. Compliance checks
+6. Investor-deal matching

@@ -3,95 +3,96 @@ from __future__ import annotations
 import os
 
 from fastapi import HTTPException
-from openai import APIStatusError, OpenAI
+from google import genai
+from google.genai import errors, types
 from pydantic import ValidationError
 
-from app.schemas import AnalysisResponse
-from app.utils import load_environment, parse_json_content
+from app.schemas import AnalysisResponse, DocumentBundle
+from app.utils import MODEL_NAME, compact_json, load_environment
 
 
 SYSTEM_PROMPT = (
-    "Extract startup deck facts. Return strict JSON only."
+    "You are an investment analyst assistant. "
+    "Return strict JSON matching the schema. "
+    "Use only supplied evidence. "
+    "Set source to null when a field is not directly supported by the provided documents."
 )
 
 
-def _build_user_prompt(deck_text: str, retry: bool = False) -> str:
-    retry_note = "\nPrevious output failed validation. Fix the JSON and schema exactly.\n" if retry else ""
+def _build_user_prompt(bundle: DocumentBundle, retry: bool = False) -> str:
+    retry_note = "Previous output failed validation. Fix the JSON and schema exactly.\n" if retry else ""
     return (
-        "Return these fields: company_name, sector, stage, funding_ask, traction_stats, business_model, red_flags.\n"
-        "Rules: exactly 3 red_flags, concise strings, preserve metrics and currency, no markdown.\n"
-        f"{retry_note}\nDeck text:\n{deck_text}"
+        "Analyze the startup submission and produce an investment screening summary.\n"
+        "Rules:\n"
+        "- Use only these source labels when justified: Pitch Deck, Financial Statements, Cap Table, Legal Documents.\n"
+        "- Do not fabricate source attribution.\n"
+        "- red_flags must contain exactly 3 items.\n"
+        "- investment_readiness_score must be an integer from 0 to 100.\n"
+        "- strengths and concerns should be concise investor-facing points.\n"
+        f"{retry_note}"
+        "Document bundle:\n"
+        f"{compact_json(bundle.model_dump())}"
     )
 
 
-def _get_client() -> tuple[OpenAI, str]:
+def _get_client() -> genai.Client:
     load_environment()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured.")
-    client = OpenAI(api_key=api_key)
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    return client, model
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
+    return genai.Client(api_key=api_key)
 
 
-def _request_analysis(client: OpenAI, model: str, deck_text: str, retry: bool = False) -> str:
-    response = client.chat.completions.create(
-        model=model,
-        temperature=0.2,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _build_user_prompt(deck_text, retry=retry)},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "founder_submission_triage",
-                "strict": True,
-                "schema": AnalysisResponse.model_json_schema(),
-            },
-        },
+def _request_analysis(client: genai.Client, bundle: DocumentBundle, retry: bool = False) -> AnalysisResponse:
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=_build_user_prompt(bundle, retry=retry),
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=AnalysisResponse,
+        ),
     )
-    content = response.choices[0].message.content
-    if not content:
+
+    if response.parsed is not None:
+        return AnalysisResponse.model_validate(response.parsed)
+
+    response_text = getattr(response, "text", "") or ""
+    if not response_text:
         raise HTTPException(status_code=502, detail="Model returned an empty response.")
-    return content
+
+    return AnalysisResponse.model_validate_json(response_text)
 
 
-def _validate_model_output(content: str) -> AnalysisResponse:
-    payload = parse_json_content(content)
-    return AnalysisResponse.model_validate(payload)
+def _map_gemini_error(exc: errors.APIError) -> HTTPException:
+    detail = "Gemini API request failed."
+    if exc.code == 400:
+        detail = "Gemini rejected the request. Check prompt size or payload shape."
+    elif exc.code == 401:
+        detail = "GEMINI_API_KEY is invalid or unauthorized."
+    elif exc.code == 429:
+        detail = "Gemini quota exceeded. Check billing, credits, or project limits for this API key."
+    elif exc.code and exc.code >= 500:
+        detail = "Gemini service is temporarily unavailable."
+    return HTTPException(status_code=exc.code or 502, detail=detail)
 
 
-def _map_openai_error(exc: APIStatusError) -> HTTPException:
-    detail = "OpenAI API request failed."
-    if exc.status_code == 401:
-        detail = "OpenAI API key is invalid or unauthorized."
-    elif exc.status_code == 429:
-        detail = "OpenAI quota exceeded. Check billing, credits, or project limits for this API key."
-    elif exc.status_code >= 500:
-        detail = "OpenAI service is temporarily unavailable."
-    return HTTPException(status_code=exc.status_code, detail=detail)
-
-
-def analyze_pitch_deck(deck_text: str) -> AnalysisResponse:
-    client, model = _get_client()
+def analyze_documents(bundle: DocumentBundle) -> AnalysisResponse:
+    client = _get_client()
 
     try:
-        content = _request_analysis(client, model, deck_text)
-    except APIStatusError as exc:
-        raise _map_openai_error(exc) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OpenAI API error: {exc}") from exc
-
-    try:
-        return _validate_model_output(content)
-    except (ValueError, ValidationError):
+        return _request_analysis(client, bundle)
+    except (ValidationError, ValueError):
         try:
-            retry_content = _request_analysis(client, model, deck_text, retry=True)
-            return _validate_model_output(retry_content)
-        except APIStatusError as exc:
-            raise _map_openai_error(exc) from exc
-        except (ValueError, ValidationError) as exc:
+            return _request_analysis(client, bundle, retry=True)
+        except errors.APIError as exc:
+            raise _map_gemini_error(exc) from exc
+        except (ValidationError, ValueError) as exc:
             raise HTTPException(status_code=502, detail=f"Model returned invalid structured JSON: {exc}") from exc
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"OpenAI API error: {exc}") from exc
+            raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc
+    except errors.APIError as exc:
+        raise _map_gemini_error(exc) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc

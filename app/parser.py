@@ -5,15 +5,15 @@ from io import BytesIO
 import fitz
 from pptx import Presentation
 
-from app.utils import prepare_text_for_llm
+from app.schemas import DocumentBundle
+from app.utils import DOCUMENT_LABELS, ensure_supported_file, prepare_text_for_llm
 
 
 def _split_pdf_page(page: fitz.Page) -> list[str]:
     blocks = page.get_text("blocks")
     lines: list[str] = []
     for block in blocks:
-        text = block[4]
-        for line in text.splitlines():
+        for line in block[4].splitlines():
             if line.strip():
                 lines.append(line)
     return lines
@@ -50,3 +50,26 @@ def extract_text(file_bytes: bytes, extension: str) -> str:
     if extension == ".pptx":
         return extract_pptx_text(file_bytes)
     raise ValueError("Unsupported file type. Only PDF and PPTX are allowed.")
+
+
+def extract_file_text(filename: str, file_bytes: bytes) -> str:
+    return extract_text(file_bytes, ensure_supported_file(filename))
+
+
+def build_document_bundle(files_by_category: dict[str, list[tuple[str, bytes]]]) -> DocumentBundle:
+    bundle_data: dict[str, str] = {key: "" for key in DOCUMENT_LABELS}
+
+    for category, uploads in files_by_category.items():
+        if category not in bundle_data or not uploads:
+            continue
+
+        sections: list[str] = []
+        for filename, file_bytes in uploads:
+            extracted_text = extract_file_text(filename, file_bytes)
+            if extracted_text:
+                source_name = DOCUMENT_LABELS[category]
+                sections.append(f"[{source_name} | {filename}]\n{extracted_text}")
+
+        bundle_data[category] = "\n\n".join(sections)
+
+    return DocumentBundle.model_validate(bundle_data)

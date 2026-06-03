@@ -1,17 +1,72 @@
 {
-  "company_name": "Acme Robotics",
-  "sector": "Industrial automation",
-  "stage": "Seed",
-  "funding_ask": "$2M",
+  "company_name": {
+    "value": "Acme Robotics",
+    "source": "Pitch Deck"
+  },
+  "sector": {
+    "value": "Industrial automation",
+    "source": "Pitch Deck"
+  },
+  "stage": {
+    "value": "Seed",
+    "source": "Pitch Deck"
+  },
+  "funding_ask": {
+    "value": "$2M",
+    "source": "Pitch Deck"
+  },
   "traction_stats": [
-    "$420k ARR",
-    "18 enterprise customers",
-    "22% month-over-month revenue growth"
+    {
+      "value": "$420k ARR",
+      "source": "Financial Statements"
+    },
+    {
+      "value": "18 enterprise customers",
+      "source": "Pitch Deck"
+    },
+    {
+      "value": "22% month-over-month revenue growth",
+      "source": "Financial Statements"
+    }
   ],
-  "business_model": "Annual SaaS contracts sold to warehouse operators.",
+  "business_model": {
+    "value": "Annual SaaS contracts sold to warehouse operators.",
+    "source": "Pitch Deck"
+  },
   "red_flags": [
-    "Customer concentration is high.",
-    "Gross margin trend is not clearly shown.",
-    "Go-to-market hiring plan is underspecified."
+    {
+      "value": "Customer concentration is high.",
+      "source": "Financial Statements"
+    },
+    {
+      "value": "Gross margin trend is not clearly shown.",
+      "source": "Financial Statements"
+    },
+    {
+      "value": "Go-to-market hiring plan is underspecified.",
+      "source": "Pitch Deck"
+    }
+  ],
+  "readiness_score": 78,
+  "investment_readiness_score": 78,
+  "strengths": [
+    {
+      "value": "Healthy early revenue momentum.",
+      "source": "Financial Statements"
+    },
+    {
+      "value": "Clear enterprise wedge and customer proof points.",
+      "source": "Pitch Deck"
+    }
+  ],
+  "concerns": [
+    {
+      "value": "Customer concentration remains elevated.",
+      "source": "Financial Statements"
+    },
+    {
+      "value": "Go-to-market scaling plan needs more detail.",
+      "source": "Pitch Deck"
+    }
   ]
 }

@@ -10,6 +10,13 @@ from dotenv import load_dotenv
 SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 MAX_LLM_CHARS = 12000
+MODEL_NAME = "gemini-2.5-flash"
+DOCUMENT_LABELS = {
+    "pitch_deck": "Pitch Deck",
+    "financials": "Financial Statements",
+    "cap_table": "Cap Table",
+    "legal_docs": "Legal Documents",
+}
 PRIORITY_KEYWORDS = {
     "company",
     "problem",
@@ -45,8 +52,7 @@ def ensure_supported_file(filename: str) -> str:
 
 def normalize_line(line: str) -> str:
     line = (line or "").replace("\x00", " ").replace("\t", " ")
-    line = re.sub(r"\s+", " ", line).strip(" -|")
-    return line
+    return re.sub(r"\s+", " ", line).strip(" -|")
 
 
 def normalize_lines(lines: list[str]) -> list[str]:
@@ -54,7 +60,8 @@ def normalize_lines(lines: list[str]) -> list[str]:
 
 
 def is_metric_line(line: str) -> bool:
-    return bool(re.search(r"(\$|₹|%|\bARR\b|\bMRR\b|\bCAC\b|\bLTV\b|\bGMV\b|\bROI\b|\bYoY\b|\bMoM\b|\b\d[\d,\.]*\b)", line, re.IGNORECASE))
+    pattern = r"(\$|₹|%|\bARR\b|\bMRR\b|\bCAC\b|\bLTV\b|\bGMV\b|\bROI\b|\bYoY\b|\bMoM\b|\b\d[\d,\.]*\b)"
+    return bool(re.search(pattern, line, re.IGNORECASE))
 
 
 def is_heading_line(line: str) -> bool:
@@ -68,9 +75,7 @@ def is_heading_line(line: str) -> bool:
 
 
 def is_probable_noise(line: str, repeated_count: int) -> bool:
-    if repeated_count < 3:
-        return False
-    if is_metric_line(line):
+    if repeated_count < 3 or is_metric_line(line):
         return False
     words = line.split()
     return len(words) <= 8 and len(line) <= 60
@@ -81,10 +86,6 @@ def strip_repeated_noise(lines: list[str]) -> list[str]:
     for line in lines:
         counts[line] = counts.get(line, 0) + 1
     return [line for line in lines if not is_probable_noise(line, counts[line])]
-
-
-def clean_text(text: str) -> str:
-    return normalize_line(text)
 
 
 def score_line(line: str) -> int:
@@ -118,8 +119,7 @@ def prioritize_text(lines: list[str], max_chars: int = MAX_LLM_CHARS) -> str:
         total += addition
 
     if not chosen:
-        fallback = "\n".join(lines)
-        return fallback[:max_chars]
+        return "\n".join(lines)[:max_chars]
 
     chosen.sort(key=lambda item: item[0])
     return "\n".join(line for _, line in chosen)
@@ -130,11 +130,8 @@ def prepare_text_for_llm(lines: list[str], max_chars: int = MAX_LLM_CHARS) -> st
     return prioritize_text(cleaned, max_chars=max_chars)
 
 
-def parse_json_content(content: str) -> dict:
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise ValueError("Malformed JSON returned by model.") from exc
+def compact_json(data: object) -> str:
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 def load_environment() -> None:
