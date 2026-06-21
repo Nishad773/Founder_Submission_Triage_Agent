@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 
-from fastapi import HTTPException
 from google import genai
 from google.genai import errors, types
 from pydantic import ValidationError
@@ -39,7 +38,7 @@ def _get_client() -> genai.Client:
     load_environment()
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
+        raise ValueError("GEMINI_API_KEY is not configured.")
     return genai.Client(api_key=api_key)
 
 
@@ -60,12 +59,12 @@ def _request_analysis(client: genai.Client, bundle: DocumentBundle, retry: bool 
 
     response_text = getattr(response, "text", "") or ""
     if not response_text:
-        raise HTTPException(status_code=502, detail="Model returned an empty response.")
+        raise RuntimeError("Model returned an empty response.")
 
     return AnalysisResponse.model_validate_json(response_text)
 
 
-def _map_gemini_error(exc: errors.APIError) -> HTTPException:
+def _map_gemini_error(exc: errors.APIError) -> Exception:
     detail = "Gemini API request failed."
     if exc.code == 400:
         detail = "Gemini rejected the request. Check prompt size or payload shape."
@@ -75,7 +74,7 @@ def _map_gemini_error(exc: errors.APIError) -> HTTPException:
         detail = "Gemini quota exceeded. Check billing, credits, or project limits for this API key."
     elif exc.code and exc.code >= 500:
         detail = "Gemini service is temporarily unavailable."
-    return HTTPException(status_code=exc.code or 502, detail=detail)
+    return RuntimeError(detail)
 
 
 def analyze_documents(bundle: DocumentBundle) -> AnalysisResponse:
@@ -89,10 +88,10 @@ def analyze_documents(bundle: DocumentBundle) -> AnalysisResponse:
         except errors.APIError as exc:
             raise _map_gemini_error(exc) from exc
         except (ValidationError, ValueError) as exc:
-            raise HTTPException(status_code=502, detail=f"Model returned invalid structured JSON: {exc}") from exc
+            raise RuntimeError(f"Model returned invalid structured JSON: {exc}") from exc
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc
+            raise RuntimeError(f"Gemini API error: {exc}") from exc
     except errors.APIError as exc:
         raise _map_gemini_error(exc) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc
+        raise RuntimeError(f"Gemini API error: {exc}") from exc

@@ -35,10 +35,8 @@ This MVP ingests founder materials, extracts high-signal evidence from multiple 
 flowchart TD
     A["Pitch Decks / Financials"] --> B["Document Parser"]
     B --> C["Text Processing"]
-    C --> D["Gemini"]
-    D --> E["Validation"]
-    E --> F["Investment Analysis"]
-    F --> G["Streamlit UI"]
+    C --> D["Gemini Analysis"]
+    D --> E["Streamlit UI Validation & Display"]
 ```
 
 ## What The Product Delivers
@@ -48,10 +46,7 @@ flowchart TD
 - Source attribution is preserved wherever the uploaded materials clearly support a field.
 - Analysts can review the result quickly in the UI and export JSON for downstream workflows.
 
-## Architecture
 
-- `app/main.py`
-Handles FastAPI endpoints, upload orchestration, and backward-compatible single-file support.
 
 - `app/parser.py`
 Extracts text from PDF and PPTX files, preserves source boundaries, and assembles the internal document bundle.
@@ -82,27 +77,19 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-3. Start the API:
+3. Start the application:
 
 ```bash
-uvicorn app.main:app --reload
+streamlit run main.py
 ```
 
-4. Start the UI:
+4. Open:
 
-```bash
-streamlit run frontend/app.py
-```
-
-5. Open:
-
-- API docs: `http://127.0.0.1:8000/docs`
 - Streamlit UI: `http://localhost:8501`
 
 ## Environment Variables
 
 - `GEMINI_API_KEY`
-- `BACKEND_API_URL`
 
 ## Analyst Experience
 
@@ -118,34 +105,7 @@ Placeholder: add a screenshot of the loading and active analysis experience here
 
 Placeholder: add a screenshot of the company overview, readiness score, strengths, concerns, and red flags here.
 
-## API
 
-### `POST /analyze`
-
-Accepts multipart form-data. The backend supports both:
-
-- a legacy single `file` upload
-- categorized uploads for:
-  - `pitch_deck`
-  - `financial_statements`
-  - `cap_table`
-  - `legal_documents`
-
-Supported file types:
-
-- `.pdf`
-- `.pptx`
-
-## Sample Request
-
-```bash
-curl -X POST "http://127.0.0.1:8000/analyze" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "pitch_deck=@sample-deck.pdf" \
-  -F "financial_statements=@financials.pdf" \
-  -F "cap_table=@cap-table.pdf"
-```
 
 ## Demo Output
 
