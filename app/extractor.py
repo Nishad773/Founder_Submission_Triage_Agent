@@ -37,6 +37,16 @@ def _build_user_prompt(bundle: DocumentBundle, retry: bool = False) -> str:
 def _get_client() -> genai.Client:
     load_environment()
     api_key = os.getenv("GEMINI_API_KEY")
+    
+    # Fallback to Streamlit secrets (useful for Streamlit Community Cloud)
+    if not api_key:
+        try:
+            import streamlit as st
+            if "GEMINI_API_KEY" in st.secrets:
+                api_key = st.secrets["GEMINI_API_KEY"]
+        except Exception:
+            pass
+
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not configured.")
     return genai.Client(api_key=api_key)
